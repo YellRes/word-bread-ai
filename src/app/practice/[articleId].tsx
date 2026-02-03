@@ -1,36 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, ScrollView, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MOCK_ARTICLES } from '../../constants/mockData';
-import { Article, Sentence, WordSegment } from '../../types';
+import { Layout, Text, Button, Input, Card, Icon, IconElement, Spinner } from '@ui-kitten/components';
+import { Article } from '../../types';
+import * as Speech from 'expo-speech';
+
+// Icons
+const VolumeIcon = (props: any): IconElement => (
+    <Icon {...props} name='volume-up-outline' />
+);
+
+const ArrowBackIcon = (props: any): IconElement => (
+    <Icon {...props} name='arrow-back-outline' />
+);
+
+const ArrowForwardIcon = (props: any): IconElement => (
+    <Icon {...props} name='arrow-forward-outline' />
+);
+
+const CheckmarkIcon = (props: any): IconElement => (
+    <Icon {...props} name='checkmark-circle-2-outline' />
+);
 
 export default function PracticePage() {
-    const { articleId } = useLocalSearchParams<{ articleId: string }>();
+    const { articleId, articleData } = useLocalSearchParams<{ articleId: string, articleData: string }>();
     const router = useRouter();
 
     const [article, setArticle] = useState<Article | null>(null);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [userAnswer, setUserAnswer] = useState('');
+    const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
     const [feedback, setFeedback] = useState<'none' | 'correct' | 'wrong'>('none');
 
     useEffect(() => {
-        const found = MOCK_ARTICLES.find(a => a.id === articleId);
-        if (found) {
-            setArticle(found);
+        if (articleData) {
+            try {
+                const parsedArticle = JSON.parse(articleData);
+                setArticle(parsedArticle);
+            } catch (e) {
+                console.error("Failed to parse article data", e);
+                // Fallback or error handling
+            }
         }
-    }, [articleId]);
+        // If we implement 'fetch by ID' later, we would add else block here.
+    }, [articleData, articleId]);
 
     if (!article) {
-        return <View className="flex-1 justify-center items-center"><Text>Article not found</Text></View>;
+        return (
+            <Layout style={styles.container} level='1'>
+                <View style={styles.centerContent}>
+                    <Text category='h5' status='danger'>Article not found</Text>
+                    <Button style={styles.marginTop} onPress={() => router.back()}>Go Back</Button>
+                </View>
+            </Layout>
+        );
     }
 
     const currentSentence = article.sentences[currentIndex];
 
+    // Helpers
     const handleNext = () => {
         if (currentIndex < article.sentences.length - 1) {
             setCurrentIndex(prev => prev + 1);
             resetState();
         } else {
+            // Show completion modal or alert
             Alert.alert("Completed", "You finished this article!", [
                 { text: "Back to List", onPress: () => router.back() }
             ]);
@@ -45,143 +78,260 @@ export default function PracticePage() {
     };
 
     const resetState = () => {
-        setUserAnswer('');
+        setUserAnswers({});
         setFeedback('none');
     };
 
-    const handleSubmit = () => {
-        if (feedback === 'correct') {
-            handleNext();
-            return;
-        }
 
-        const blankSegment = currentSentence.segments.find(s => s.isBlank);
-        if (!blankSegment || !blankSegment.answer) return;
-
-        const isCorrect = userAnswer.trim().toLowerCase() === blankSegment.answer.toLowerCase();
-
-        if (isCorrect) {
-            setFeedback('correct');
-            // Auto advance or wait for user? User said "Submit ... if correct enter next".
-            // I'll add a small delay or let user click "Next" which now says "Continue"?
-            // "提交正确则进入下一个句子" -> implies automatic or immediate transition logic.
-            // But usually feedback is good. I'll auto-advance after 1s or show a "Correct! Next" button state.
-            // Let's manually advance to ensure they see the green state.
-        } else {
-            setFeedback('wrong');
-        }
-    };
 
     const playSound = () => {
-        // Simulated TTS
-        console.log(`Playing audio for: ${currentSentence.raw}`);
-        Alert.alert("Audio", `Playing: "${currentSentence.raw}"`);
+        // Construct the clean sentence to speak
+        // Filter out the hint part from blanks. 
+        // Logic: if isBlank, use the answer. If not, use text.
+        const textToSpeak = currentSentence.segments.map(s => {
+            if (s.isBlank) return s.answer;
+            return s.text;
+        }).join(' ');
+
+        console.log(`Playing audio for: ${textToSpeak}`);
+        Speech.speak(textToSpeak, { language: 'en' });
     };
 
+    // Derived UI states
+    const inputStatus = feedback === 'correct' ? 'success' : feedback === 'wrong' ? 'danger' : 'basic';
+    const isFirst = currentIndex === 0;
+    const isLast = currentIndex === article.sentences.length - 1;
+
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-white"
-        >
-            <ScrollView contentContainerClassName="p-6 flex-grow justify-center">
-                {/* Progress Header */}
-                <View className="mb-8 flex-row justify-between items-center">
-                    <Text className="text-gray-500 font-medium">
-                        Sentence {currentIndex + 1} / {article.sentences.length}
-                    </Text>
-                    <Pressable onPress={playSound} className="p-2 bg-blue-100 rounded-full">
-                        <Text className="text-xl">🔊</Text>
-                    </Pressable>
-                </View>
+        <Layout style={styles.container} level='1'>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.keyboardView}
+            >
+                <ScrollView contentContainerStyle={styles.scrollContent}>
 
-                {/* Sentence Display */}
-                <View className="flex-row flex-wrap items-center justify-center mb-10">
-                    {currentSentence.segments.map((seg, idx) => (
-                        <React.Fragment key={seg.id}>
-                            {seg.isBlank ? (
-                                <View className="mx-1 items-center">
-                                    <View className="flex-row items-center">
-                                        {/* Input or Result */}
-                                        {feedback === 'correct' ? (
-                                            <Text className="text-2xl font-bold text-green-600 border-b-2 border-green-600 px-2">
-                                                {seg.answer}
-                                            </Text>
-                                        ) : feedback === 'wrong' ? (
-                                            <View className="flex-col items-center">
-                                                <Text className="text-xl text-red-500 line-through mb-1">{userAnswer}</Text>
-                                                <Text className="text-2xl font-bold text-green-600">{seg.answer}</Text>
-                                            </View>
-                                        ) : (
-                                            <TextInput
-                                                className="border-b-2 border-gray-400 text-2xl px-2 min-w-[80px] text-center text-slate-800"
-                                                placeholder="____"
-                                                value={userAnswer}
-                                                onChangeText={setUserAnswer}
-                                                autoCapitalize="none"
-                                                autoCorrect={false}
-                                            />
-                                        )}
-
-                                        {/* Hint Display */}
-                                        {seg.hint && (
-                                            <Text className="text-sm text-gray-500 ml-1">({seg.hint})</Text>
-                                        )}
-                                    </View>
-                                </View>
-                            ) : (
-                                <Text className="text-2xl text-slate-800 mx-1">{seg.text}</Text>
-                            )}
-                        </React.Fragment>
-                    ))}
-                </View>
-
-                {/* Feedback Message */}
-                {feedback === 'wrong' && (
-                    <Text className="text-red-500 text-center mb-4 font-bold text-lg">Incorrect. Try to remember!</Text>
-                )}
-                {feedback === 'correct' && (
-                    <Text className="text-green-600 text-center mb-4 font-bold text-lg">Correct! Well done.</Text>
-                )}
-
-                {/* Controls */}
-                <View className="mt-8">
-                    {feedback === 'correct' ? (
-                        <Pressable
-                            onPress={handleNext}
-                            className="bg-green-500 p-4 rounded-xl items-center shadow-md"
+                    {/* Header Info */}
+                    <View style={styles.header}>
+                        <Text category='s1' appearance='hint'>
+                            Sentence {currentIndex + 1} / {article.sentences.length}
+                        </Text>
+                        <Button
+                            accessoryLeft={VolumeIcon}
+                            size='small'
+                            appearance='ghost'
+                            status='primary'
+                            onPress={playSound}
                         >
-                            <Text className="text-white text-lg font-bold">Next Sentence →</Text>
-                        </Pressable>
-                    ) : (
-                        <Pressable
-                            onPress={handleSubmit}
-                            className={`p-4 rounded-xl items-center shadow-md ${userAnswer.length > 0 ? 'bg-blue-600' : 'bg-gray-300'}`}
-                            disabled={userAnswer.length === 0}
-                        >
-                            <Text className="text-white text-lg font-bold">Submit</Text>
-                        </Pressable>
-                    )}
-
-                    <View className="flex-row justify-between mt-6">
-                        <Pressable
-                            onPress={handlePrev}
-                            className={`p-3 rounded-lg ${currentIndex === 0 ? 'opacity-30' : 'bg-gray-200'}`}
-                            disabled={currentIndex === 0}
-                        >
-                            <Text className="font-semibold text-gray-600">← Prev</Text>
-                        </Pressable>
-
-                        <Pressable
-                            onPress={handleNext}
-                            className={`p-3 rounded-lg ${currentIndex === article.sentences.length - 1 ? 'opacity-30' : 'bg-gray-200'}`}
-                            disabled={currentIndex === article.sentences.length - 1}
-                        >
-                            <Text className="font-semibold text-gray-600">Skip →</Text>
-                        </Pressable>
+                            Play Audio
+                        </Button>
                     </View>
 
-                </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+                    {/* Sentence Layout */}
+                    <Card style={styles.card} status='primary'>
+                        <View style={styles.sentenceContainer}>
+                            {currentSentence.segments.map((seg, idx) => (
+                                <View key={seg.id} style={styles.segmentWrapper}>
+                                    {seg.isBlank ? (
+                                        <View style={styles.inputWrapper}>
+                                            {feedback === 'correct' ? (
+                                                <Text status='success' category='h5' style={styles.answerText}>
+                                                    {seg.answer}
+                                                </Text>
+                                            ) : (
+                                                <Input
+                                                    style={styles.input}
+                                                    status={inputStatus}
+                                                    placeholder={seg.hint}
+                                                    value={userAnswers[seg.id] || ''}
+                                                    onChangeText={text => {
+                                                        const newAnswers = { ...userAnswers, [seg.id]: text };
+                                                        setUserAnswers(newAnswers);
+
+                                                        // Real-time validation for ALL blanks
+                                                        const blankSegments = currentSentence.segments.filter(s => s.isBlank);
+                                                        const allCorrect = blankSegments.every(s => {
+                                                            const ans = newAnswers[s.id] || '';
+                                                            return s.answer && ans.trim().toLowerCase() === s.answer.toLowerCase();
+                                                        });
+
+                                                        if (allCorrect) {
+                                                            setFeedback('correct');
+                                                            // Optional: Dismiss keyboard on success?
+                                                            // Keyboard.dismiss();
+                                                        } else {
+                                                            if (feedback !== 'none') setFeedback('none');
+                                                        }
+                                                    }}
+                                                    autoCapitalize='none'
+                                                    autoCorrect={false}
+                                                    textStyle={styles.inputText}
+                                                />
+                                            )}
+                                            {feedback === 'wrong' && (
+                                                <Text status='danger' category='c1' style={styles.hintText}>
+                                                    Try again!
+                                                </Text>
+                                            )}
+                                            {/* Hint moved to placeholder */}
+                                        </View>
+                                    ) : (
+                                        <Text category='h5' style={styles.staticText}>{seg.text}</Text>
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    </Card>
+
+                    {/* Feedback & Actions */}
+                    <View style={styles.actionsContainer}>
+                        {feedback === 'correct' && (
+                            <Layout level='2' style={styles.successBanner}>
+                                <Icon style={styles.icon} fill='#3366FF' name='star' />
+                                <Text status='primary' category='h6'>Correct! Well done.</Text>
+                            </Layout>
+                        )}
+
+                        {feedback === 'correct' && (
+                            <Button
+                                style={styles.mainButton}
+                                size='giant'
+                                status='success'
+                                accessoryRight={ArrowForwardIcon}
+                                onPress={handleNext}
+                            >
+                                Next Sentence
+                            </Button>
+                        )}
+
+                        <View style={styles.navButtons}>
+                            <Button
+                                appearance='ghost'
+                                status='basic'
+                                accessoryLeft={ArrowBackIcon}
+                                disabled={isFirst}
+                                onPress={handlePrev}
+                            >
+                                Prev
+                            </Button>
+                            <Button
+                                appearance='ghost'
+                                status='basic'
+                                accessoryRight={ArrowForwardIcon}
+                                disabled={isLast}
+                                onPress={handleNext}
+                            >
+                                Skip
+                            </Button>
+                        </View>
+                    </View>
+
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </Layout>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    centerContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    scrollContent: {
+        flexGrow: 1,
+        padding: 24,
+        justifyContent: 'center',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 32,
+    },
+    card: {
+        marginBottom: 32,
+        borderRadius: 12,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    sentenceContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        paddingVertical: 16,
+    },
+    segmentWrapper: {
+        marginHorizontal: 4,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    inputWrapper: {
+        minWidth: 100,
+        alignItems: 'center',
+    },
+    input: {
+        minWidth: 120,
+        textAlign: 'center',
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        borderBottomWidth: 1,
+        borderBottomColor: '#8F9BB3',
+        ...Platform.select({
+            web: {
+                outlineStyle: 'none',
+            } as any,
+        }),
+    },
+    inputText: {
+        textAlign: 'center',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    answerText: {
+        textDecorationLine: 'underline',
+        marginBottom: 8,
+    },
+    staticText: {
+        lineHeight: 40,
+        marginBottom: 8,
+    },
+    hintText: {
+        marginTop: 4,
+    },
+    marginTop: {
+        marginTop: 16,
+    },
+    actionsContainer: {
+        marginTop: 8,
+    },
+    successBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+        gap: 8,
+    },
+    mainButton: {
+        marginBottom: 24,
+    },
+    navButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    icon: {
+        width: 32,
+        height: 32,
+    },
+});
