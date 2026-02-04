@@ -5,7 +5,10 @@ import { Layout, Text, Button, Input, Card, Icon, IconElement, Spinner } from '@
 import { Article } from '../../types';
 import * as Speech from 'expo-speech';
 
+
 // Icons
+
+
 const VolumeIcon = (props: any): IconElement => (
     <Icon {...props} name='volume-up-outline' />
 );
@@ -84,6 +87,8 @@ export default function PracticePage() {
 
 
 
+
+
     const playSound = () => {
         // Construct the clean sentence to speak
         // Filter out the hint part from blanks. 
@@ -115,6 +120,7 @@ export default function PracticePage() {
                         <Text category='s1' appearance='hint'>
                             Sentence {currentIndex + 1} / {article.sentences.length}
                         </Text>
+
                         <Button
                             accessoryLeft={VolumeIcon}
                             size='small'
