@@ -3,32 +3,32 @@
  * AI Generated - Optimized UI based on Stitch design
  */
 import {
-    Button,
-    Card,
-    Icon,
-    IconElement,
-    Input,
-    Layout,
-    Text,
+  Button,
+  Card,
+  Icon,
+  IconElement,
+  Layout,
+  Text,
 } from "@ui-kitten/components";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
 } from "react-native";
 import {
-    BORDER_RADIUS,
-    Colors,
-    FONT_FAMILY,
-    PRIMARY_COLOR,
-    SPACING,
-    SUCCESS_COLOR,
+  BORDER_RADIUS,
+  Colors,
+  FONT_FAMILY,
+  PRIMARY_COLOR,
+  SPACING,
+  SUCCESS_COLOR,
 } from "../../constants/theme";
 import { Article } from "../../types";
 
@@ -140,14 +140,7 @@ export default function PracticePage() {
     Speech.speak(textToSpeak, { language: "en" });
   };
 
-  const inputStatus =
-    feedback === "correct"
-      ? "success"
-      : feedback === "wrong"
-        ? "danger"
-        : "basic";
   const isFirst = currentIndex === 0;
-  const isLast = currentIndex === article.sentences.length - 1;
 
   return (
     <Layout style={styles.container} level="1">
@@ -182,10 +175,10 @@ export default function PracticePage() {
                         </View>
                       ) : (
                         <View style={styles.inputContainer}>
-                          <Input
-                            style={styles.input}
-                            status={inputStatus}
+                          <TextInput
+                            style={styles.textInput}
                             placeholder={`(${seg.hint})`}
+                            placeholderTextColor={Colors.light.textSecondary}
                             value={userAnswers[seg.id] || ""}
                             onChangeText={(text) => {
                               const newAnswers = {
@@ -215,7 +208,7 @@ export default function PracticePage() {
                             }}
                             autoCapitalize="none"
                             autoCorrect={false}
-                            textStyle={styles.inputText}
+                            selectionColor={PRIMARY_COLOR}
                           />
                         </View>
                       )}
@@ -265,8 +258,8 @@ export default function PracticePage() {
             <View style={styles.tipTextContainer}>
               <Text style={styles.tipLabel}>Tip:</Text>
               <Text style={styles.tipText}>
-                '{blankWord}' is a common word. Keep up the great work with your
-                daily bread!
+                &apos;{blankWord}&apos; is a common word. Keep up the great work
+                with your daily bread!
               </Text>
             </View>
           </View>
@@ -390,22 +383,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: PRIMARY_COLOR,
   },
-  input: {
+  textInput: {
     minWidth: 100,
     textAlign: "center",
     backgroundColor: "transparent",
     borderWidth: 0,
+    fontSize: 22,
+    fontFamily: FONT_FAMILY.bold,
+    color: Colors.light.text,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    // Remove focus outline on web
     ...Platform.select({
       web: {
         outlineStyle: "none",
       } as any,
     }),
-  },
-  inputText: {
-    textAlign: "center",
-    fontSize: 22,
-    fontFamily: FONT_FAMILY.bold,
-    color: Colors.light.text,
   },
   correctAnswerContainer: {
     borderBottomWidth: 2,

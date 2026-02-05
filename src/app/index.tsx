@@ -2,47 +2,66 @@
  * Article List Page - Word Bread AI
  * AI Generated - Optimized UI based on Stitch design
  */
-import {
-    Card,
-    Icon,
-    IconElement,
-    Layout,
-    List,
-    Spinner,
-    Text,
-} from "@ui-kitten/components";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
 import {
-    BORDER_RADIUS,
-    Colors,
-    FONT_FAMILY,
-    PRIMARY_COLOR,
-    SPACING,
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  BORDER_RADIUS,
+  Colors,
+  FONT_FAMILY,
+  PRIMARY_COLOR,
+  PRIMARY_COLOR_LIGHT,
+  SPACING,
 } from "../constants/theme";
 import { fetchArticles } from "../services/dataService";
 import { Article } from "../types";
 
-// Icons
-const ArrowIcon = (props: any): IconElement => (
-  <Icon {...props} name="arrow-ios-forward-outline" />
-);
-
-const ClockIcon = (props: any): IconElement => (
-  <Icon {...props} name="clock-outline" />
-);
-
 // Calculate estimated reading time (approx 1 min per 2-3 sentences)
 const getReadingTime = (sentenceCount: number): string => {
   const minutes = Math.max(1, Math.ceil(sentenceCount / 2));
-  return `${minutes} min read`;
+  return `${minutes} Sentence NEED REVIEW`;
 };
+
+// Article Card Component
+const ArticleCard = ({
+  item,
+  onPress,
+}: {
+  item: Article;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+    <Text style={styles.cardTitle}>{item.title}</Text>
+    <Text style={styles.cardDescription} numberOfLines={2}>
+      {item.description}
+    </Text>
+    <View style={styles.cardFooter}>
+      <View style={styles.readTimeBadge}>
+        <View style={styles.badgeDot} />
+        <Text style={styles.readTimeText}>
+          {getReadingTime(item.sentences.length)}
+        </Text>
+      </View>
+    </View>
+  </TouchableOpacity>
+);
 
 export default function ArticleList() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     loadData();
@@ -55,150 +74,224 @@ export default function ArticleList() {
     setLoading(false);
   };
 
-  const renderItemHeader = (headerProps: any, item: Article) => (
-    <View {...headerProps} style={[headerProps.style, styles.headerContainer]}>
-      <Text category="h6" style={styles.title}>
-        {item.title}
-      </Text>
-    </View>
-  );
+  const handleArticlePress = (item: Article) => {
+    router.push({
+      pathname: `/practice/${item.id}` as any,
+      params: { articleData: JSON.stringify(item) },
+    });
+  };
 
-  const renderItemFooter = (footerProps: any, item: Article) => (
-    <View {...footerProps} style={[footerProps.style, styles.footerContainer]}>
-      <View style={styles.readTimeContainer}>
-        <ClockIcon style={styles.clockIcon} fill={PRIMARY_COLOR} />
-        <Text appearance="hint" category="c1" style={styles.readTimeText}>
-          {getReadingTime(item.sentences.length)}
-        </Text>
-      </View>
-      <View style={styles.arrowContainer}>
-        <ArrowIcon style={styles.arrowIcon} fill={PRIMARY_COLOR} />
-      </View>
-    </View>
-  );
-
-  const renderItem = ({ item }: { item: Article }) => (
-    <Card
-      style={styles.card}
-      status="basic"
-      header={(props) => renderItemHeader(props, item)}
-      footer={(props) => renderItemFooter(props, item)}
-      onPress={() => {
-        router.push({
-          pathname: `/practice/${item.id}`,
-          params: { articleData: JSON.stringify(item) },
-        });
-      }}
-    >
-      <Text category="s1" style={styles.description}>
-        {item.description}
-      </Text>
-    </Card>
+  // Filter articles based on search text
+  const filteredArticles = articles.filter(
+    (item) =>
+      item.title.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchText.toLowerCase()),
   );
 
   if (loading) {
     return (
-      <Layout style={styles.loadingContainer} level="2">
-        <Spinner size="giant" status="primary" />
-        <Text style={styles.loadingText} appearance="hint">
-          Loading articles...
-        </Text>
-      </Layout>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <Text style={styles.loadingText}>Loading articles...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Layout style={styles.container} level="2">
-      <List
-        style={styles.list}
-        contentContainerStyle={styles.contentContainer}
-        data={articles}
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Colors.light.cardBackground}
       />
-    </Layout>
+      <View style={styles.container}>
+        {/* Header - Icon + Title only */}
+        <View style={styles.header}>
+          <View style={styles.headerIconContainer}>
+            <MaterialIcons name="bakery-dining" size={24} color="#FFFFFF" />
+          </View>
+          <Text style={styles.headerTitle}>Word Bread AI</Text>
+        </View>
+
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <MaterialIcons
+              name="search"
+              size={20}
+              color={Colors.light.textSecondary}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search bakery articles..."
+              placeholderTextColor={Colors.light.textSecondary}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+        </View>
+
+        {/* Articles List */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredArticles.map((item) => (
+            <ArticleCard
+              key={item.id}
+              item={item}
+              onPress={() => handleArticlePress(item)}
+            />
+          ))}
+
+          {/* Bottom Footer Text */}
+          <View style={styles.footerContainer}>
+            <MaterialIcons
+              name="bakery-dining"
+              size={16}
+              color={PRIMARY_COLOR}
+            />
+            <Text style={styles.footerText}>FRESHLY BAKED DAILY</Text>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.light.cardBackground,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  list: {
+  // Header Styles
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: Colors.light.cardBackground,
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.large,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: SPACING.sm,
+  },
+  headerTitle: {
+    fontFamily: FONT_FAMILY.bold,
+    fontSize: 20,
+    color: Colors.light.text,
+  },
+  // Search Input Styles
+  searchContainer: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    backgroundColor: Colors.light.cardBackground,
+  },
+  searchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.light.background,
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    height: 44,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  searchIcon: {
+    marginRight: SPACING.sm,
+  },
+  searchInput: {
     flex: 1,
-    backgroundColor: "transparent",
+    fontFamily: FONT_FAMILY.regular,
+    fontSize: 14,
+    color: Colors.light.text,
+    padding: 0,
+  },
+  // ScrollView
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.xl,
   },
+  // Card Styles
   card: {
-    marginVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.medium,
     backgroundColor: Colors.light.cardBackground,
-    borderWidth: 0,
-    // Shadow for iOS
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderRadius: BORDER_RADIUS.large,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
-  headerContainer: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
-  title: {
+  cardTitle: {
     fontFamily: FONT_FAMILY.semiBold,
+    fontSize: 16,
     color: Colors.light.text,
-    fontSize: 18,
+    marginBottom: SPACING.xs,
   },
-  description: {
-    color: Colors.light.textSecondary,
+  cardDescription: {
     fontFamily: FONT_FAMILY.regular,
     fontSize: 14,
+    color: Colors.light.textSecondary,
     lineHeight: 20,
+    marginBottom: SPACING.sm,
   },
-  footerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  readTimeContainer: {
+  cardFooter: {
     flexDirection: "row",
     alignItems: "center",
+    marginTop: SPACING.xs,
   },
-  clockIcon: {
-    width: 16,
-    height: 16,
+  readTimeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: PRIMARY_COLOR_LIGHT + "20",
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: PRIMARY_COLOR,
     marginRight: SPACING.xs,
   },
   readTimeText: {
-    fontFamily: FONT_FAMILY.regular,
-    color: Colors.light.textSecondary,
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 11,
+    color: PRIMARY_COLOR,
+    letterSpacing: 0.5,
   },
-  arrowContainer: {
-    backgroundColor: `${PRIMARY_COLOR}15`,
-    borderRadius: BORDER_RADIUS.full,
-    padding: SPACING.xs,
+  // Footer
+  footerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: SPACING.lg,
+    marginTop: SPACING.md,
   },
-  arrowIcon: {
-    width: 20,
-    height: 20,
+  footerText: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    color: PRIMARY_COLOR,
+    letterSpacing: 1,
+    marginLeft: SPACING.xs,
   },
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -208,5 +301,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: SPACING.md,
     fontFamily: FONT_FAMILY.regular,
+    color: Colors.light.textSecondary,
   },
 });

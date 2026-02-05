@@ -125,3 +125,12 @@ export const customTheme = {
   "text-heading-2-font-family": "Lexend_600SemiBold",
   "text-subtitle-1-font-family": "Lexend_500Medium",
 };
+
+// Custom Input styles for practice page (no border on focus)
+export const practiceInputStyle = {
+  borderWidth: 0,
+  borderColor: "transparent",
+  backgroundColor: "transparent",
+  // Override focused state
+  borderBottomWidth: 0,
+};

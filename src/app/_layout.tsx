@@ -9,10 +9,7 @@ import { ActivityIndicator, View } from "react-native";
 import "../global.css";
 
 import * as eva from "@eva-design/eva";
-import {
-    ApplicationProvider,
-    IconRegistry
-} from "@ui-kitten/components";
+import { ApplicationProvider, IconRegistry } from "@ui-kitten/components";
 import { EvaIconsPack } from "@ui-kitten/eva-icons";
 
 import {
@@ -83,11 +80,7 @@ export default function RootLayout() {
             <Stack.Screen
               name="index"
               options={{
-                title: "Word Bread AI",
-                headerTitleStyle: {
-                  fontFamily: "Lexend_700Bold",
-                  fontWeight: "700",
-                },
+                headerShown: false,
               }}
             />
             <Stack.Screen
