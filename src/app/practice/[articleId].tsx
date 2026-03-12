@@ -20,6 +20,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import {
@@ -30,7 +31,8 @@ import {
   SPACING,
   SUCCESS_COLOR,
 } from "../../constants/theme";
-import { Article } from "../../types";
+import { fetchArticles } from "../../services/dataService";
+import { Article, Sentence } from "../../types";
 
 // Icons
 const VolumeIcon = (props: any): IconElement => (
@@ -53,10 +55,29 @@ const BulbIcon = (props: any): IconElement => (
   <Icon {...props} name="bulb-outline" />
 );
 
-// Get current blank word for tip
-const getBlankWord = (segments: any[]): string => {
-  const blank = segments.find((s) => s.isBlank);
-  return blank?.answer || "";
+// Prefer explicit translation; fallback to replacing (answer-hint) with hint.
+const getSentenceTranslation = (sentence: Sentence): string => {
+  const explicitTranslation =
+    (sentence as any).translate ||
+    (sentence as any).translation ||
+    (sentence as any).cn ||
+    "";
+  if (typeof explicitTranslation === "string" && explicitTranslation.trim()) {
+    return explicitTranslation.trim();
+  }
+
+  return (sentence.raw || "")
+    .replace(/\(([^)]+)\)/g, (_, content: string) => {
+      const separatorIdx = content.lastIndexOf("-");
+      if (separatorIdx === -1) return content.trim();
+
+      const hint = content.substring(separatorIdx + 1).trim();
+      const answer = content.substring(0, separatorIdx).trim();
+      return hint || answer;
+    })
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 };
 
 export default function PracticePage() {
@@ -69,19 +90,47 @@ export default function PracticePage() {
   const [article, setArticle] = useState<Article | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [revealedAnswers, setRevealedAnswers] = useState<
+    Record<string, boolean>
+  >({});
   const [feedback, setFeedback] = useState<"none" | "correct" | "wrong">(
     "none",
   );
 
   useEffect(() => {
-    if (articleData) {
+    let cancelled = false;
+
+    const loadArticle = async () => {
+      if (!articleData) return;
+
       try {
-        const parsedArticle = JSON.parse(articleData);
-        setArticle(parsedArticle);
+        const parsedArticle = JSON.parse(articleData) as Article;
+        if (!cancelled) setArticle(parsedArticle);
+
+        // Some navigations may carry stale articleData in params.
+        // If translation is missing in params, refetch by articleId.
+        const hasTranslation = parsedArticle.sentences?.some((s) =>
+          Boolean(s.translate?.trim() || s.translation?.trim()),
+        );
+        if (hasTranslation || !articleId) return;
+
+        const latestArticles = await fetchArticles();
+        const latestArticle = latestArticles.find(
+          (a) => String(a.id) === String(articleId),
+        );
+        if (latestArticle && !cancelled) {
+          setArticle(latestArticle);
+        }
       } catch (e) {
         console.error("Failed to parse article data", e);
       }
-    }
+    };
+
+    loadArticle();
+
+    return () => {
+      cancelled = true;
+    };
   }, [articleData, articleId]);
 
   if (!article) {
@@ -104,7 +153,8 @@ export default function PracticePage() {
   }
 
   const currentSentence = article.sentences[currentIndex];
-  const blankWord = getBlankWord(currentSentence.segments);
+  const blankSegments = currentSentence.segments.filter((s) => s.isBlank);
+  const sentenceTranslation = getSentenceTranslation(currentSentence);
 
   const handleNext = () => {
     if (currentIndex < article.sentences.length - 1) {
@@ -126,18 +176,23 @@ export default function PracticePage() {
 
   const resetState = () => {
     setUserAnswers({});
+    setRevealedAnswers({});
     setFeedback("none");
   };
 
-  const playSound = () => {
-    const textToSpeak = currentSentence.segments
-      .map((s) => {
-        if (s.isBlank) return s.answer;
-        return s.text;
-      })
-      .join(" ");
+  const playBlankWordSound = (answer?: string) => {
+    const englishWord = answer?.trim();
+    if (!englishWord) return;
 
-    Speech.speak(textToSpeak, { language: "en" });
+    Speech.stop();
+    Speech.speak(englishWord, { language: "en-US" });
+  };
+
+  const toggleRevealAnswer = (segId: string) => {
+    setRevealedAnswers((prev) => ({
+      ...prev,
+      [segId]: !prev[segId],
+    }));
   };
 
   const isFirst = currentIndex === 0;
@@ -187,10 +242,6 @@ export default function PracticePage() {
                               };
                               setUserAnswers(newAnswers);
 
-                              const blankSegments =
-                                currentSentence.segments.filter(
-                                  (s) => s.isBlank,
-                                );
                               const allCorrect = blankSegments.every((s) => {
                                 const ans = newAnswers[s.id] || "";
                                 return (
@@ -224,19 +275,54 @@ export default function PracticePage() {
             </View>
           </Card>
 
-          {/* Audio Button */}
-          <View style={styles.audioContainer}>
-            <Button
-              style={styles.audioButton}
-              accessoryLeft={(props) => (
-                <VolumeIcon {...props} fill="#FFFFFF" />
-              )}
-              size="medium"
-              onPress={playSound}
-            >
-              {() => <Text style={styles.audioButtonText}>Play Audio</Text>}
-            </Button>
-          </View>
+          {/* Blank Tools Section */}
+          {blankSegments.length > 0 && (
+            <View style={styles.blankToolsContainer}>
+              <Text style={styles.blankToolsTitle}>挖空操作</Text>
+              <View style={styles.blankToolsList}>
+                {blankSegments.map((seg, index) => (
+                  <View key={`tool-${seg.id}`} style={styles.blankToolItem}>
+                    <Text style={styles.blankToolLabel}>#{index + 1}</Text>
+                    <TouchableOpacity
+                      style={styles.blankIconButton}
+                      onPress={() => playBlankWordSound(seg.answer)}
+                      activeOpacity={0.7}
+                    >
+                      <VolumeIcon
+                        style={styles.blankActionIcon}
+                        fill={PRIMARY_COLOR}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.blankIconButton,
+                        revealedAnswers[seg.id] && styles.blankIconButtonActive,
+                      ]}
+                      onPress={() => toggleRevealAnswer(seg.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Icon
+                        name={
+                          revealedAnswers[seg.id]
+                            ? "eye-off-outline"
+                            : "eye-outline"
+                        }
+                        style={styles.blankActionIcon}
+                        fill={PRIMARY_COLOR}
+                      />
+                    </TouchableOpacity>
+                    {revealedAnswers[seg.id] && !!seg.answer && (
+                      <View style={styles.revealedAnswerChip}>
+                        <Text style={styles.revealedAnswerText}>
+                          {seg.answer}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Next Button - shown on correct */}
           {feedback === "correct" && (
@@ -252,15 +338,12 @@ export default function PracticePage() {
             </Button>
           )}
 
-          {/* Tip Section */}
+          {/* Translation Section */}
           <View style={styles.tipContainer}>
             <BulbIcon style={styles.bulbIcon} fill={PRIMARY_COLOR} />
             <View style={styles.tipTextContainer}>
-              <Text style={styles.tipLabel}>Tip:</Text>
-              <Text style={styles.tipText}>
-                &apos;{blankWord}&apos; is a common word. Keep up the great work
-                with your daily bread!
-              </Text>
+              <Text style={styles.tipLabel}>翻译：</Text>
+              <Text style={styles.tipText}>{sentenceTranslation || "暂无翻译"}</Text>
             </View>
           </View>
 
@@ -376,7 +459,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   inputWrapper: {
-    minWidth: 80,
+    minWidth: 90,
     alignItems: "center",
   },
   inputContainer: {
@@ -422,21 +505,62 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     marginTop: 4,
   },
-  // Audio Button
-  audioContainer: {
-    alignItems: "center",
+  blankToolsContainer: {
     marginBottom: SPACING.lg,
   },
-  audioButton: {
-    backgroundColor: PRIMARY_COLOR,
-    borderColor: PRIMARY_COLOR,
-    borderRadius: BORDER_RADIUS.medium,
-    paddingHorizontal: SPACING.lg,
+  blankToolsTitle: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    marginBottom: SPACING.xs,
   },
-  audioButtonText: {
-    fontFamily: FONT_FAMILY.semiBold,
-    color: "#FFFFFF",
-    marginLeft: SPACING.sm,
+  blankToolsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+  },
+  blankToolItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    backgroundColor: Colors.light.cardBackground,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  blankToolLabel: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+  },
+  // Blank action icon buttons
+  blankIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${PRIMARY_COLOR}12`,
+  },
+  blankIconButtonActive: {
+    backgroundColor: `${PRIMARY_COLOR}22`,
+  },
+  blankActionIcon: {
+    width: 16,
+    height: 16,
+  },
+  revealedAnswerText: {
+    fontFamily: FONT_FAMILY.medium,
+    fontSize: 12,
+    color: PRIMARY_COLOR,
+  },
+  revealedAnswerChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${PRIMARY_COLOR}12`,
   },
   // Next Button
   nextButton: {

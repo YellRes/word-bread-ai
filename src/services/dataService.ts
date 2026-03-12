@@ -27,7 +27,8 @@ export const fetchArticles = async (): Promise<Article[]> => {
             const parsedSentences: Sentence[] = dbSentences.map((s: any) =>
                 parseRawSentence({
                     id: s.id,
-                    raw: s.content // Map DB 'content' to our 'raw'
+                    raw: s.content, // Map DB 'content' to our 'raw'
+                    translate: s.translate || s.translation || s.cn || ''
                 })
             );
 
@@ -46,7 +47,7 @@ export const fetchArticles = async (): Promise<Article[]> => {
     }
 };
 
-const parseRawSentence = (item: { id: any, raw: string }): Sentence => {
+const parseRawSentence = (item: { id: any, raw: string, translate?: string }): Sentence => {
     // raw content example: "I have a (pen-笔)"
 
     const segments: WordSegment[] = [];
@@ -122,6 +123,7 @@ const parseRawSentence = (item: { id: any, raw: string }): Sentence => {
     return {
         id: String(item.id),
         raw: raw,
+        translate: item.translate || '',
         segments: segments
     };
 };

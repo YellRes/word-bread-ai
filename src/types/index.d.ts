@@ -12,6 +12,8 @@ export interface Sentence {
     id: string;
     segments: WordSegment[];
     raw: string; // "I have a (pen-笔)"
+    translate?: string; // Chinese translation from backend
+    translation?: string; // Optional alias for compatibility
 }
 
 export interface Article {
